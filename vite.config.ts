@@ -6,7 +6,12 @@ import { defineConfig } from 'vite';
 import { mcpAppView } from './scripts/mcp-app-view-plugin';
 
 export default defineConfig({
-    plugins: [react(), cloudflare(), mcpAppView()],
+    plugins: [
+        react(),
+        // Terraform deployments build against a generated Wrangler config.
+        cloudflare({ configPath: process.env.LARAFEED_WRANGLER_CONFIG }),
+        mcpAppView(),
+    ],
     envDir: false,
     resolve: {
         alias: {

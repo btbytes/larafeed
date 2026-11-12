@@ -1,0 +1,7 @@
+# Provider cache, plus the module's rendered Wrangler config and secrets file
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example

@@ -174,7 +174,7 @@ Choose one:
   
 2. Under **R2 → Manage API tokens**, create a token with **Object Read & Write** on that bucket. Note its **Access Key ID** and **Secret Access Key**.
   
-3. In your deployment directory (created in the next section), add a file `backend.tf`:
+3. In your deployment directory (`infra/terraform/deployments/reader/`, created in the [next section](#7-create-your-deployment-directory)), add a file `backend.tf`. **Replace `<ACCOUNT_ID>` with your real account ID** from [section 4](#4-get-your-cloudflare-account-id), for example `https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com`. Type it in literally: Terraform doesn't allow variables in a `backend` block, so `var.account_id` won't work here.
   
   ```hcl
   terraform {
@@ -208,7 +208,7 @@ Choose one:
 
 See Cloudflare's [remote R2 backend guide](https://developers.cloudflare.com/terraform/advanced-topics/remote-backend/). [HCP Terraform](https://developer.hashicorp.com/terraform/cloud-docs) is another option, but its remote runners don't have Bun installed, so you would need to use its [local execution mode](https://developer.hashicorp.com/terraform/cloud-docs/workspaces/settings#execution-mode).
 ## 7. Create your deployment directory
-Keep your deployment's files separate from the module so that updating the repository never overwrites your settings.
+The deployment directory is the folder that holds _your_ deployment's files: your settings, your backend configuration and (with local state) your state. The Larafeed module in `infra/terraform/modules/larafeed` is shared code you don't edit; your deployment directory calls it. Keeping the two separate means updating the repository never overwrites your settings.
 
 ```bash
 mkdir -p infra/terraform/deployments/reader
@@ -216,6 +216,17 @@ cd infra/terraform/deployments/reader
 ```
 
 The directory must be exactly two levels below `infra/terraform`, because the configuration below refers to the module as `../../modules/larafeed`. You can choose any name instead of `reader`.
+
+When you finish this section it contains:
+
+```
+infra/terraform/deployments/reader/
+├── main.tf            # providers, variables, and the call to the module
+├── backend.tf         # only if you chose remote state (section 6, option B)
+└── terraform.tfvars   # your values; ignored by Git
+```
+
+Run every `terraform` command from inside this directory. Terraform also creates `.terraform/`, `.terraform.lock.hcl` and (with local state) `terraform.tfstate` here.
 ### `main.tf`
 Create `main.tf` with this content. It declares the providers, the settings you'll fill in, and one call to the Larafeed module.
 
@@ -299,7 +310,13 @@ output "auth_operator_secret" {
 }
 ```
 ### `terraform.tfvars`
-Create `terraform.tfvars` with your values. Terraform loads this file automatically. It is excluded from Git by the repository's `.gitignore`.
+Create `terraform.tfvars` in the deployment directory, next to `main.tf` (not in the repository root or the module directory):
+
+```bash
+touch infra/terraform/deployments/reader/terraform.tfvars   # from the repository root
+```
+
+Fill it with your values. Terraform loads this file automatically. It is excluded from Git by `infra/terraform/.gitignore` (`*.tfvars`), which you can confirm with `git check-ignore -v terraform.tfvars`.
 
 **With your own domain:**
 
@@ -671,6 +688,8 @@ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
 **The deploy step failed partway.** Fix the cause and run `terraform apply` again. The deploy step is marked as not completed, so Terraform retries it; migrations that already ran are skipped.
 
 `terraform plan` **always shows** `terraform_data.deploy` **being replaced.** Something in the source tree changes between runs, such as an editor rewriting files under `src/`. Pin `source_version` to a commit SHA ([section 12](#in-ci)).
+
+`Failed to get existing workspaces: Unable to list objects in S3 bucket ... tls: handshake failure` **during** `terraform init`**.** The `endpoints.s3` URL in `backend.tf` still contains the literal `<ACCOUNT_ID>` placeholder, so Terraform is connecting to a host that doesn't exist. Replace it with your 32-character account ID ([section 6, option B](#6-decide-where-terraform-keeps-its-state)) and run `terraform init` again. If the URL is correct, check that `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are exported with your R2 token's keys (not the Cloudflare API token) and that the bucket exists in that account.
 
 `Error acquiring the state lock`**.** Another `terraform` command is running against the same state, or a previous one crashed. Wait, or if you are sure nothing is running, use `terraform force-unlock` with the lock ID from the error.
 
